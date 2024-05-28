@@ -1454,7 +1454,7 @@ and tree_of_typlist mode tyl =
 and tree_of_labeled_typlist mode tyl =
   List.map (fun (label, ty) -> label, tree_of_typexp mode Alloc.Const.legacy ty) tyl
 
-and tree_of_typ_gf (ty, gf) =
+and tree_of_typ_gf {ca_type=ty; ca_global=gf; _} =
   let gf =
     match gf with
     | Global_flag.Global -> Ogf_global
