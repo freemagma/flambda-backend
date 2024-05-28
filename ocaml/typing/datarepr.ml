@@ -18,7 +18,6 @@
 
 open Asttypes
 open Types
-open Mode
 open Btype
 
 (* Simplified version of Ctype.free_vars *)
@@ -95,7 +94,13 @@ let constructor_args ~current_unit priv cd_args cd_res path rep =
         }
       in
       existentials,
-      [ newgenconstr path type_params, Global_flag.Unrestricted ],
+      [
+        {
+          ca_type = newgenconstr path type_params;
+          ca_global = Unrestricted;
+          ca_loc = Location.none
+        }
+      ],
       Some tdecl
 
 let constructor_descrs ~current_unit ty_path decl cstrs rep =
