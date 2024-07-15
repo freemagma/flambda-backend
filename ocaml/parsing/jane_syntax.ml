@@ -841,6 +841,7 @@ module N_ary_functions = struct
     type t =
       | Top_level
       | Fun_then of after_fun
+      | Mode_constraint of modes
       | Jkind_annotation of Jkind.annotation
 
     (* We return an [of_suffix_result] from [of_suffix] rather than having
@@ -864,6 +865,9 @@ module N_ary_functions = struct
       | Top_level -> [], None
       | Fun_then Cases -> ["cases"], None
       | Fun_then Constraint_then_cases -> ["constraint"; "cases"], None
+      | Mode_constraint modes ->
+        let payload = Mode.list_as_payload modes in
+        ["mode_constraint"], Some payload
       | Jkind_annotation jkind_annotation ->
         let payload = Jkind_annotation.Encode.as_payload jkind_annotation in
         ["jkind_annotation"], Some payload
@@ -873,6 +877,11 @@ module N_ary_functions = struct
       | [] -> No_payload Top_level
       | ["cases"] -> No_payload (Fun_then Cases)
       | ["constraint"; "cases"] -> No_payload (Fun_then Constraint_then_cases)
+      | ["mode_constraint"] ->
+        Payload
+          (fun payload ~loc ->
+            let modes = Mode.list_from_payload payload ~loc in
+            Mode_constraint modes)
       | ["jkind_annotation"] ->
         Payload
           (fun payload ~loc ->
@@ -1010,12 +1019,19 @@ module N_ary_functions = struct
     | Pexp_function cases -> cases
     | _ -> Desugaring_error.raise expr (Expected_function_cases arity_attribute)
 
+  let constraint_modes expr : modes =
+    match expand_n_ary_expr expr with
+    | Some (Mode_constraint modes, _) -> modes
+    | _ -> []
+
   let check_constraint expr =
     match expr.pexp_desc with
-    | Pexp_constraint (e, Some ty, m) ->
-      Some ({ mode_annotations = m; type_constraint = Pconstraint ty }, e)
+    | Pexp_constraint (e, Some ty, _) ->
+      let mode_annotations = constraint_modes expr in
+      Some ({ mode_annotations; type_constraint = Pconstraint ty }, e)
     | Pexp_coerce (e, ty1, ty2) ->
-      Some ({ mode_annotations = []; type_constraint = Pcoerce (ty1, ty2) }, e)
+      let mode_annotations = constraint_modes expr in
+      Some ({ mode_annotations; type_constraint = Pcoerce (ty1, ty2) }, e)
     | _ -> None
 
   let require_constraint expr =
@@ -1092,6 +1108,13 @@ module N_ary_functions = struct
         extract_next_fun_param
           { expr with pexp_attributes = unconsumed_attributes }
           ~jkind:(Some next_jkind)
+      | Some (Mode_constraint _, _unconsumed_attributes) ->
+        (* We need not pass through any unconsumed attributes, as
+            [Mode_constraint _] isn't the outermost Jane Syntax node:
+            [extract_fun_params] took in [Pexp_fun] or [Pexp_newtype].
+        *)
+        let function_constraint, body = require_constraint expr in
+        None, Stop (Some function_constraint, Pfunction_body body)
       | Some ((Fun_then after_fun as arity_attribute), unconsumed_attributes) ->
         let param, body =
           require_param expr.pexp_desc expr.pexp_loc ~arity_attribute ~jkind
@@ -1217,7 +1240,7 @@ module N_ary_functions = struct
           let possibly_constrained_body =
             match constraint_ with
             | None -> body
-            | Some { mode_annotations; type_constraint } ->
+            | Some { mode_annotations; type_constraint } -> (
               let constrained_body =
                 (* We can't call [Location.ghostify] here, as we need this file
                    to build with the upstream compiler; see Note [Buildable with
@@ -1225,11 +1248,14 @@ module N_ary_functions = struct
                 let loc = { body.pexp_loc with loc_ghost = true } in
                 match type_constraint with
                 | Pconstraint ty ->
-                  Ast_helper.Exp.constraint_ body (Some ty) ~loc
-                    mode_annotations
+                  Ast_helper.Exp.constraint_ body (Some ty) ~loc []
                 | Pcoerce (ty1, ty2) -> Ast_helper.Exp.coerce body ty1 ty2 ~loc
               in
-              constrained_body
+              match mode_annotations with
+              | _ :: _ ->
+                n_ary_function_expr (Mode_constraint mode_annotations)
+                  constrained_body
+              | [] -> constrained_body)
           in
           match params with
           | [] -> possibly_constrained_body
