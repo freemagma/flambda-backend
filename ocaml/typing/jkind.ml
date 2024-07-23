@@ -1462,6 +1462,8 @@ module Format_history = struct
 
   let format_value_or_null_creation_reason ppf :
       History.value_or_null_creation_reason -> _ = function
+    | Primitive id ->
+      fprintf ppf "it is the primitive value_or_null type %s" (Ident.name id)
     | Tuple_element -> fprintf ppf "it's the type of a tuple element"
     | Separability_check ->
       fprintf ppf "the check that a type is definitely not `float`"
@@ -1471,12 +1473,14 @@ module Format_history = struct
       fprintf ppf "it's the type of something stored in a module structure"
     | V1_safety_check ->
       fprintf ppf "it has to be value for the V1 safety check"
+    | Probe -> format_with_notify_js ppf "it's a probe"
+    | Captured_in_object ->
+      fprintf ppf "it's the type of a variable captured in an object"
 
   let format_value_creation_reason ppf ~layout_or_kind :
       History.value_creation_reason -> _ = function
     | Class_let_binding ->
       fprintf ppf "it's the type of a let-bound variable in a class expression"
-    | Probe -> format_with_notify_js ppf "it's a probe"
     | Object -> fprintf ppf "it's the type of an object"
     | Instance_variable -> fprintf ppf "it's the type of an instance variable"
     | Object_field -> fprintf ppf "it's the type of an object field"
@@ -1518,8 +1522,6 @@ module Format_history = struct
     | Debug_printer_argument ->
       format_with_notify_js ppf
         "it's the type of an argument to a debugger printer function"
-    | Captured_in_object ->
-      fprintf ppf "it's the type of a variable captured in an object"
     | Recmod_fun_arg ->
       fprintf ppf
         "it's the type of the first argument to a function in a recursive \
@@ -1933,15 +1935,17 @@ module Debug_printers = struct
 
   let value_or_null_creation_reason ppf :
       History.value_or_null_creation_reason -> _ = function
+    | Primitive id -> fprintf ppf "Primitive %s" (Ident.unique_name id)
     | Tuple_element -> fprintf ppf "Tuple_element"
     | Separability_check -> fprintf ppf "Separability_check"
     | Polymorphic_variant_field -> fprintf ppf "Polymorphic_variant_field"
     | Structure_element -> fprintf ppf "Structure_element"
     | V1_safety_check -> fprintf ppf "V1_safety_check"
+    | Probe -> fprintf ppf "Probe"
+    | Captured_in_object -> fprintf ppf "Captured_in_object"
 
   let value_creation_reason ppf : History.value_creation_reason -> _ = function
     | Class_let_binding -> fprintf ppf "Class_let_binding"
-    | Probe -> fprintf ppf "Probe"
     | Object -> fprintf ppf "Object"
     | Instance_variable -> fprintf ppf "Instance_variable"
     | Object_field -> fprintf ppf "Object_field"
@@ -1968,7 +1972,6 @@ module Debug_printers = struct
     | Class_type_argument -> fprintf ppf "Class_type_argument"
     | Class_term_argument -> fprintf ppf "Class_term_argument"
     | Debug_printer_argument -> fprintf ppf "Debug_printer_argument"
-    | Captured_in_object -> fprintf ppf "Captured_in_object"
     | Recmod_fun_arg -> fprintf ppf "Recmod_fun_arg"
     | Unknown s -> fprintf ppf "Unknown %s" s
 
